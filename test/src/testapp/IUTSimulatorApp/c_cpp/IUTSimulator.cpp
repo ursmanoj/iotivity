@@ -510,12 +510,12 @@ int main(int argc, char* argv[])
             if (optionSelected == 6)
             {
                 cout << "Using IP version: IPv6" << endl;
-                g_ipVer = CT_IP_USE_V6;
+                g_ipVer = CT_DEFAULT;
             }
             else if (optionSelected == 4)
             {
                 cout << "Using IP version: IPv4" << endl;
-                g_ipVer = CT_IP_USE_V4;
+                g_ipVer = CT_DEFAULT;
                 serverIp = SERVER_IP_V6;
             }
             else
@@ -845,7 +845,7 @@ void addIntoLinksArray(vector< OCRepresentation >& childrenList, SampleResource*
         flag = (CATransportFlags_t)(flag | CA_SECURE);
     }
 
-    if (g_ipVer == CT_IP_USE_V4)
+    if (g_ipVer == CT_DEFAULT)
     {
         flag = (CATransportFlags_t)(flag | CA_IPV4);
     }
@@ -915,7 +915,7 @@ OCEntityHandlerResult entityHandlerCollection(std::shared_ptr< OCResourceRequest
                     flag = (CATransportFlags_t)(flag | CA_SECURE);
                 }
 
-                if (g_ipVer == CT_IP_USE_V4)
+                if (g_ipVer == CT_DEFAULT)
                 {
                     flag = (CATransportFlags_t)(flag | CA_IPV4);
                 }
@@ -1324,6 +1324,7 @@ void onResourceFound(shared_ptr< OCResource > resource)
 {
     s_mutex.lock();
     cout << "Found a resource!!" << endl;
+	//MANOJERROR;
 
     if (resource)
     {
@@ -1337,6 +1338,42 @@ void onResourceFound(shared_ptr< OCResource > resource)
         cout << resource->sid() << endl;
         cout << "unique identifier of found resource is = ";
         cout << resource->uniqueIdentifier() << endl;
+
+	 // Get Resource Endpoint Infomation
+        std::cout << "\tList of resource endpoints: " << std::endl;
+        for(auto &resourceEndpoints : resource->getAllHosts())
+        {
+            std::cout << "\t\t" << resourceEndpoints << std::endl;
+        }
+
+		if (std::string::npos != resource->host().find("coap://") ||
+                std::string::npos != resource->host().find("coaps://") ||
+                std::string::npos != resource->host().find("coap+tcp://") ||
+                std::string::npos != resource->host().find("coaps+tcp://"))
+            {
+                for(auto &resourceEndpoints : resource->getAllHosts())
+                {
+                    if (resourceEndpoints.compare(resource->host()) != 0 &&
+                        std::string::npos == resourceEndpoints.find("coap+rfcomm"))
+                    {
+                        std::string newHost = resourceEndpoints;
+
+                        if (std::string::npos != newHost.find("tcp"))
+                        {
+                            //TRANSPORT_TYPE_TO_USE = OCConnectivityType::CT_ADAPTER_TCP;
+                        }
+                        else
+                        {
+                            //TRANSPORT_TYPE_TO_USE = OCConnectivityType::CT_ADAPTER_IP;
+                        }
+                        // Change Resource host if another host exists
+                        std::cout << "\tChange host of resource endpoints" << std::endl;
+                        std::cout << "\t\t" << "Current host is "
+                                  << resource->setHost(newHost) << std::endl;
+                        break;
+                    }
+                }
+            }
 
         string resourceType = resource->getResourceTypes().front();
         if(resourceType.compare(OC_RSRVD_RESOURCE_TYPE_INTROSPECTION) == 0)
@@ -1433,12 +1470,21 @@ void onDeviceInfoReceived(const OCRepresentation& rep)
     g_hasCallbackArrived = true;
 }
 
+void printReps(const OCRepresentation &rep) {
+	for(auto& attribute : rep)
+    {
+        std::cout<< "\treps."<<attribute.attrname()<<":"
+            << attribute.type()<<" with value " <<attribute.getValueToString() <<std::endl;
+    }
+}
+
 // callback handler on GET request
 void onGet(const HeaderOptions &headerOptions, const OCRepresentation &rep, const int eCode)
 {
     if (eCode == SUCCESS_RESPONSE || eCode == OC_STACK_OK)
     {
         cout << "Response: GET request was successful" << endl;
+		printReps(rep);
 
         vector< string > interfaceList = rep.getResourceInterfaces();
 

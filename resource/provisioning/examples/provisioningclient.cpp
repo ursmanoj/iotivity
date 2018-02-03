@@ -108,6 +108,8 @@ void printMenu()
     std::cout << "  19. Add pre configure PIN for Multiple Ownership Transfer Mode"<<std::endl;
 #endif
     std::cout << "  20. Configure SVRdb as Self-OwnerShip"<<std::endl;
+	std::cout << "  30. Discover LED resources"<<std::endl;
+	std::cout << "  31. Discover LIGHT resources"<<std::endl;
     std::cout << "  99. Exit loop"<<std::endl;
 }
 
@@ -735,6 +737,233 @@ void MOTMethodCB(PMResultList_t *result, int hasError)
 }
 #endif // MULTIPLE_OWNER
 
+class Light
+{
+public:
+
+    bool m_state;
+    int m_power;
+    std::string m_name;
+
+    Light() : m_state(false), m_power(0), m_name("")
+    {
+    }
+};
+
+Light mylight;
+
+std::shared_ptr<OCResource> curResource;
+// callback handler on PUT request
+void onPut(const HeaderOptions& /*headerOptions*/, const OCRepresentation& rep, const int eCode)
+{
+    try
+    {
+        if (eCode == OC_STACK_OK || eCode == OC_STACK_RESOURCE_CHANGED)
+        {
+            std::cout << "PUT request was successful" << std::endl;
+
+            rep.getValue("state", mylight.m_state);
+            rep.getValue("power", mylight.m_power);
+            rep.getValue("name", mylight.m_name);
+
+            std::cout << "\tstate: " << mylight.m_state << std::endl;
+            std::cout << "\tpower: " << mylight.m_power << std::endl;
+            std::cout << "\tname: " << mylight.m_name << std::endl;
+
+            //postLightRepresentation(curResource);
+        }
+        else
+        {
+            std::cout << "onPut Response error: " << eCode << std::endl;
+            //std::exit(-1);
+        }
+    }
+    catch(std::exception& e)
+    {
+        std::cout << "Exception: " << e.what() << " in onPut" << std::endl;
+    }
+}
+
+// Local function to put a different state for this resource
+void putLightRepresentation(std::shared_ptr<OCResource> resource)
+{
+    if(resource)
+    {
+        OCRepresentation rep;
+
+        std::cout << "Putting light representation..."<<std::endl;
+
+        mylight.m_state = true;
+        mylight.m_power = 15;
+
+        rep.setValue("state", mylight.m_state);
+        rep.setValue("power", mylight.m_power);
+
+        // Invoke resource's put API with rep, query map and the callback parameter
+        resource->put(rep, QueryParamsMap(), &onPut);
+    }
+}
+
+void printReps(const OCRepresentation &rep) {
+	for(auto& attribute : rep)
+    {
+        std::cout<< "\treps."<<attribute.attrname()<<":"
+            << attribute.type()<<" with value " <<attribute.getValueToString() <<std::endl;
+
+		if(attribute.attrname()=="range") {
+			std::vector<double> tempRange;
+			if(rep.getValue<std::vector<double>>("range", tempRange)) {
+				std::cout<<"SUCCESS vector"<<std::endl;
+				std::cout<<"tempRange[0]="<<tempRange[0]<<", tempRange[1]="<<tempRange[1]<<std::endl;
+			} else {
+				std::cout<<"FAILED vector"<<std::endl;
+			}
+		}
+    }
+}
+
+
+// Callback handler on GET request
+void onGet(const HeaderOptions& /*headerOptions*/, const OCRepresentation& rep, const int eCode)
+{
+    try
+    {
+        if(eCode == OC_STACK_OK)
+        {
+            std::cout << "GET request was successful" << std::endl;
+            std::cout << "Resource URI: " << rep.getUri() << std::endl;
+
+			printReps(rep);
+#if 0
+            rep.getValue("state", mylight.m_state);
+            rep.getValue("power", mylight.m_power);
+            rep.getValue("name", mylight.m_name);
+
+            std::cout << "\tstate: " << mylight.m_state << std::endl;
+            std::cout << "\tpower: " << mylight.m_power << std::endl;
+            std::cout << "\tname: " << mylight.m_name << std::endl;
+
+            putLightRepresentation(curResource);
+			#endif
+			
+        }
+        else
+        {
+            std::cout << "onGET Response error: " << eCode << std::endl;
+            //std::exit(-1);
+        }
+    }
+    catch(std::exception& e)
+    {
+        std::cout << "Exception: " << e.what() << " in onGet" << std::endl;
+    }
+}
+
+// Local function to get representation of light resource
+void getLightRepresentation(std::shared_ptr<OCResource> resource)
+{
+    if(resource)
+    {
+        std::cout << "Getting Light Representation..."<<std::endl;
+        // Invoke resource's get API with the callback parameter
+
+        QueryParamsMap test;
+        resource->get(test, &onGet);
+    }
+}
+
+
+void foundResource(std::shared_ptr<OCResource> resource)
+{
+    std::cout << "In foundResource\n";
+    std::string resourceURI;
+    std::string hostAddress;
+
+	if(resource)
+        {
+            std::cout<<"DISCOVERED Resource:"<<std::endl;
+            // Get the resource URI
+            resourceURI = resource->uri();
+            std::cout << "\tURI of the resource: " << resourceURI << std::endl;
+
+            // Get the resource host address
+            hostAddress = resource->host();
+            std::cout << "\tHost address of the resource: " << hostAddress << std::endl;
+
+            // Get the resource types
+            std::cout << "\tList of resource types: " << std::endl;
+            for(auto &resourceTypes : resource->getResourceTypes())
+            {
+                std::cout << "\t\t" << resourceTypes << std::endl;
+            }
+
+            // Get the resource interfaces
+            std::cout << "\tList of resource interfaces: " << std::endl;
+            for(auto &resourceInterfaces : resource->getResourceInterfaces())
+            {
+                std::cout << "\t\t" << resourceInterfaces << std::endl;
+            }
+
+            // Get Resource current host
+            std::cout << "\tHost of resource: " << std::endl;
+            std::cout << "\t\t" << resource->host() << std::endl;
+
+            // Get Resource Endpoint Infomation
+            std::cout << "\tList of resource endpoints: " << std::endl;
+            for(auto &resourceEndpoints : resource->getAllHosts())
+            {
+                std::cout << "\t\t" << resourceEndpoints << std::endl;
+            }
+
+            // If resource is found from ip based adapter.
+            if (std::string::npos != resource->host().find("coap://") ||
+                std::string::npos != resource->host().find("coaps://") ||
+                std::string::npos != resource->host().find("coap+tcp://") ||
+                std::string::npos != resource->host().find("coaps+tcp://"))
+            {
+                for(auto &resourceEndpoints : resource->getAllHosts())
+                {
+                    if (resourceEndpoints.compare(resource->host()) != 0 &&
+                        std::string::npos == resourceEndpoints.find("coap+rfcomm"))
+                    {
+                        std::string newHost = resourceEndpoints;
+
+                       /* if (std::string::npos != newHost.find("tcp"))
+                        {
+                            TRANSPORT_TYPE_TO_USE = OCConnectivityType::CT_ADAPTER_TCP;
+                        }
+                        else
+                        {
+                            TRANSPORT_TYPE_TO_USE = OCConnectivityType::CT_ADAPTER_IP;
+                        }*/
+                        // Change Resource host if another host exists
+                        std::cout << "\tChange host of resource endpoints" << std::endl;
+                        std::cout << "\t\t" << "Current host is "
+                                  << resource->setHost(newHost) << std::endl;
+                        break;
+                    }
+                }
+            }
+
+          if(resourceURI == "/TemperatureResURI")
+            {
+               // if (resource->connectivityType() & TRANSPORT_TYPE_TO_USE)
+                {
+                    curResource = resource;
+                    // Get the resource host address
+                    std::cout << "\tAddress of selected resource: " << resource->host() << std::endl;
+
+                    // Call a local function which will internally invoke get API on the resource pointer
+                    getLightRepresentation(resource);
+                }
+            }
+        }
+        else
+        {
+            // Resource is invalid
+            std::cout << "Resource is invalid" << std::endl;
+        }
+}
 int main(void)
 {
     OCStackResult result;
@@ -1447,6 +1676,36 @@ int main(void)
                         }
                         break;
                     }
+				case 30:
+					{
+						// Find all resources
+						std::ostringstream requestURI;
+				        requestURI << OC_RSRVD_WELL_KNOWN_URI;//<< "?rt=core.led";// << "?rt=core.light";
+				        //requestURI << OC_RSRVD_WELL_KNOWN_URI << "?rt=core.light";
+						
+						char endp[200];
+
+						//sprintf(endp, "%s:%d", "coaps://[fe80:62d8:19ff:fe57:cc09]", pOwnedDevList[0]->getDevPtr()->securePort);
+
+						//endp = endp +  ":" + new std::string();
+
+						//std::cout<<"Finding LED at IP: "<<endp<<std::endl;
+						
+				        OCPlatform::findResource("", requestURI.str(),
+				                CT_DEFAULT, &foundResource);
+					}
+				break;
+				case 31:
+					{
+						// Find all resources
+						std::ostringstream requestURI;
+				        //requestURI << OC_RSRVD_WELL_KNOWN_URI<< "?rt=core.led";// << "?rt=core.light";
+				        requestURI << OC_RSRVD_WELL_KNOWN_URI << "?rt=core.light";
+
+				        OCPlatform::findResource("coaps://fe80::62d8:19ff:fe57:cc09%wlan0", requestURI.str(),
+				                CT_DEFAULT, &foundResource);
+					}
+				break;
                 case 99:
                 default:
                     out = 1;
